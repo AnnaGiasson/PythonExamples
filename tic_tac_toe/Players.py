@@ -1,28 +1,77 @@
 import random
+from abc import ABC, abstractmethod, abstractproperty
+from Board import Board
 
 
-class Bot_Easy():
+class TicTacToe_Player(ABC):
+
+    def __init__(self, mark) -> None:
+        self.mark = mark
+
+    @abstractproperty
+    def strategy():
+        pass
+
+    @abstractmethod
+    def move(board: Board, players: set) -> tuple:
+        pass
+
+
+class User(TicTacToe_Player):
+
+    @property
+    def strategy(self):
+        return 'human'
+
+    def validiate_user_input(self, user_input: str, board: Board) -> bool:
+
+        if user_input.replace(' ', '').isnumeric():
+            coords = [int(num) for num in user_input.split()]
+
+            if any(1 <= coord <= board.board_size for coord in coords):
+                coords = (coords[0] - 1,  board.board_size - coords[1])
+                if coords not in board.vacancies():
+                    print('This cell is occupied! Choose another one!')
+                    return False
+                return True
+            else:
+                print('Coordinates should be from'
+                      f' 1 to {board.board_size}!')
+                return False
+
+        print('You should enter numbers!')
+        return False
+
+    def move(self, board: Board, players: set) -> tuple:
+        while True:
+            user_input = input('')
+            if self.validiate_user_input(user_input, board):
+                x, y = [int(num) for num in user_input.split()]
+                x, y = (x - 1, board.board_size - y)
+
+                return x, y
+
+
+class BotRandom(TicTacToe_Player):
+
+    @property
+    def strategy(self):
+        return 'random'
+
+    def move(self, board: Board, players: set) -> tuple:
+        return random.choice(board.vacancies())
+
+
+class BotDefensive(TicTacToe_Player):
+
+    @property
+    def strategy(self):
+        return 'Defensive'
 
     def index_board(self, board):
         for y, row in enumerate(board):
             for x, elem in enumerate(row):
                 yield (x, y), elem
-
-    def random_vacancy(self, board):
-        board_spots = self.index_board(board)
-        empty_spots = [coords for coords, mark in board_spots if mark == ' ']
-        return random.choice(empty_spots)  # coords
-
-    def make_move(self, board):
-        print('Making move level "easy"')
-        return self.random_vacancy(board)
-
-
-class Bot_Medium(Bot_Easy):
-
-    def __init__(self, mark):
-        self.mark = mark
-        return None
 
     def get_winning_move(self, board, move):
 
@@ -50,8 +99,7 @@ class Bot_Medium(Bot_Easy):
                 return list(filter(lambda c: c[0] == 2 - c[1], empty_spots))[0]
         return []
 
-    def make_move(self, board):
-        print('Making move level "medium"')
+    def move(self, board: Board, players: set) -> tuple:
         comp_wins = self.get_winning_move(board, self.mark)
         if comp_wins:
             return comp_wins
@@ -61,10 +109,14 @@ class Bot_Medium(Bot_Easy):
         if opp_will_win:
             return opp_will_win
 
-        return self.random_vacancy(board)
+        return random.choice(board.vacancies())
 
 
-class Bot_Hard(Bot_Medium):
+class BotMinmax(BotDefensive):
+
+    @property
+    def strategy(self):
+        return 'Minmax'
 
     def evaluate_state(self, board):
 
@@ -120,8 +172,7 @@ class Bot_Hard(Bot_Medium):
         elif mode == 'min':
             return min(move_scores.values())
 
-    def make_move(self, board):
-        print('Making move level "hard"')
+    def move(self, board: Board, players: set) -> tuple:
 
         board_spots = self.index_board(board)
         empty_spots = [coords for coords, mark in board_spots if mark == ' ']
