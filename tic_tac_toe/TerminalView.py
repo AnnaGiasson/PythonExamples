@@ -1,4 +1,9 @@
 from Board import Board
+import os
+
+
+def _clear() -> None:
+    _ = os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def display_board(board: Board, **kwargs) -> None:
@@ -25,18 +30,25 @@ def display_board(board: Board, **kwargs) -> None:
 
 
 def start_screen() -> None:
-    print('\nTic-Tac-Toe\n',
+    _clear()
+    print('Tic-Tac-Toe\n',
           'Type any key and press "Enter" to start a new game...\n',
           '-----------------------------------------------------',
           sep='\n')
 
 
 def menu(init: bool = True) -> None:
-    print('\nMain Menu:\n',
+    _clear()
+    print('Main Menu:\n',
           '("1", or "Start"): Start a New Game', sep='\n')
     if not init:
         print('("2", or "Restart"): Play Again')
     print('("0", or "End"/"Quit): End Application\n',)
+
+
+def new_game() -> None:
+    _clear()
+    print('New Game\n')
 
 
 def select_human_players() -> None:
@@ -62,7 +74,7 @@ def select_strategy() -> None:
           ' space that results in the highest likelihood of winning, plays'
           ' against itself recursively to determine the odds. Only'
           ' availible when using 1 computer player in order to limit'
-          ' computation time' + not_imp,
+          ' computation time' + not_imp, '\n',
           sep='\n')
 
 
@@ -71,24 +83,28 @@ def select_markers(total_players: int) -> None:
           'Markers can be any non-whitespace ASCII character (case'
           ' sensitive), but should not repeat and the number of unique'
           ' markers should match the total number of players\n'
-          f' ({total_players})', sep='\n')
+          f' ({total_players})', '\n', sep='\n')
 
 
 def player_turn(marker: str, bot_player: bool) -> None:
+    _clear()
     print(f'Current Turn: {marker} '
           f'({"Bot" if bot_player else "User"})')
+    if not bot_player:
+        print('Enter Coordinates...')
 
 
 def game_over() -> None:
+    _clear()
     print('Game Over')
 
 
-def victory(marker: str) -> None:
-    print(f'{marker} Wins')
-
-
-def draw() -> None:
-    print('Draw')
+def final_result(marker: str, win: bool) -> None:
+    if win:
+        print(f'{marker} Wins')
+    else:
+        print('Draw')
+    print('Press Enter to return to the Main Menu...')
 
 
 def invalid_markers(incorrect_number: bool, repeats: bool) -> None:
@@ -110,6 +126,14 @@ def invalid_configuration(**kwargs) -> None:
 
 def invalid_input() -> None:
     print('Invalid input')
+
+
+def invalid_move() -> None:
+    print('Invalid move')
+
+
+def close() -> None:
+    _clear()
 
 
 if __name__ == '__main__':

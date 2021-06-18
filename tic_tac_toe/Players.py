@@ -1,12 +1,14 @@
 import random
 from abc import ABC, abstractmethod, abstractproperty
+from typing import Union, Tuple
 from Board import Board
+import re
 
 
 class TicTacToe_Player(ABC):
 
-    def __init__(self, mark) -> None:
-        self.mark = mark
+    def __init__(self, marker) -> None:
+        self.marker = marker
 
     @abstractproperty
     def strategy():
@@ -17,39 +19,72 @@ class TicTacToe_Player(ABC):
         pass
 
 
+class UserExit(Exception):
+    pass
+
+
+class UserHelp(Exception):
+    pass
+
+
+class UserInvalidCommand(Exception):
+    pass
+
+
+class UserInvalidMove(Exception):
+    pass
+
+
 class User(TicTacToe_Player):
 
     @property
     def strategy(self):
         return 'human'
 
-    def validiate_user_input(self, user_input: str, board: Board) -> bool:
+    @staticmethod
+    def _coord_xfmr(x: int, y: int, board_size: int, reverse: bool = False) -> Tuple[int, int]:
+        if reverse:
+            return (x + 1, board_size - y)
+        else:
+            return (x - 1, board_size - y)
 
-        if user_input.replace(' ', '').isnumeric():
-            coords = [int(num) for num in user_input.split()]
+    @staticmethod
+    def _get_coordinates(user_input: str) -> Tuple[int, int]:
 
-            if any(1 <= coord <= board.board_size for coord in coords):
-                coords = (coords[0] - 1,  board.board_size - coords[1])
-                if coords not in board.vacancies():
-                    print('This cell is occupied! Choose another one!')
-                    return False
-                return True
-            else:
-                print('Coordinates should be from'
-                      f' 1 to {board.board_size}!')
-                return False
+        coord_pattern = r'[\(\ \n]*(\d+)[,\-\ ]+(\d+)[\)\ \n]*'
+        match = re.match(coord_pattern, user_input)
 
-        print('You should enter numbers!')
-        return False
+        if match is None:
+            raise UserInvalidCommand('Unrecognized coordinate format')
+        else:
+            coords = tuple(map(int, match.groups()))
+
+        return coords
+
+    @staticmethod
+    def _check_coordinates(x: int, y: int, board: Board) -> None:
+        if any(not (1 <= i <= board.board_size) for i in (x, y)):
+            raise UserInvalidMove('Coordinates are not on the board')
+        if (x, y) not in board.vacancies():
+            raise UserInvalidMove('Space is already Occupied')
+
+    def _user_commands(self, user_input: str, board: Board) -> None:
+
+        # process possible user commands
+        if user_input in ('end', 'exit', 'stop'):
+            raise UserExit('"Exit" command issued by user')
+        elif user_input == 'help':
+            raise UserHelp('"Help" command issued by user')
 
     def move(self, board: Board, players: set) -> tuple:
-        while True:
-            user_input = input('')
-            if self.validiate_user_input(user_input, board):
-                x, y = [int(num) for num in user_input.split()]
-                x, y = (x - 1, board.board_size - y)
 
-                return x, y
+        user_input = input().strip().lower()
+
+        self._user_commands(user_input, board)
+        x, y = self._get_coordinates(user_input)
+        self._check_coordinates(x, y, board)
+
+        return self._coord_xfmr(x, y, board.board_size)
 
 
 class BotRandom(TicTacToe_Player):
@@ -73,43 +108,59 @@ class BotDefensive(TicTacToe_Player):
             for x, elem in enumerate(row):
                 yield (x, y), elem
 
-    def get_winning_move(self, board, move):
+    @staticmethod
+    def is_run(sequence: tuple, marker: str) -> bool:
+        char_set = set(sequence)
 
-        board_spots = list(self.index_board(board))
-        empty_spots = [coords for coords, mark in board_spots if mark == ' ']
-        all_marks = list(filter(lambda pos: pos[1] == move, board_spots))
+        # set of len 2 containing marker+None, with None only occuring once
+        return (char_set == {marker, None}) and (sequence.count(None) == 1)
 
-        for y in range(len(board)):  # check rows
-            if [coord[1] for coord, _ in all_marks].count(y) == 2:
-                if list(filter(lambda c: c[1] == y, empty_spots)):
-                    return list(filter(lambda c: c[1] == y, empty_spots))[0]
+    def winning_move(self, board: Board, marker) -> Union[Tuple, None]:
 
-        for x in range(len(board[0])):  # check columns
-            if [coord[0] for coord, _ in all_marks].count(x) == 2:
-                if list(filter(lambda c: c[0] == x, empty_spots)):
-                    return list(filter(lambda c: c[0] == x, empty_spots))[0]
+        N = board.board_size
 
-        # check main diagonal
-        if [co[0] == co[1] for co, _ in all_marks].count(True) == 2:
-            if list(filter(lambda c: c[0] == c[1], empty_spots)):
-                return list(filter(lambda c: c[0] == c[1], empty_spots))[0]
-        # check reverse diagonal
-        if [co[0] == 2 - co[1] for co, _ in all_marks].count(True) == 2:
-            if list(filter(lambda c: c[0] == 2 - c[1], empty_spots)):
-                return list(filter(lambda c: c[0] == 2 - c[1], empty_spots))[0]
-        return []
+        for n in range(N):  # check rows and cols
+
+            row = board.row(n)
+            col = board.column(n)
+
+            if self.is_run(row, marker):
+                x = row.index(None)
+                y = n
+                return (x, y)
+
+            elif self.is_run(col, marker):
+                x = n
+                y = col.index(None)
+                return (x, y)
+
+        # check diagonals
+        dia = board.diagonal()
+        if self.is_run(dia, marker):
+            n = dia.index(None)
+            return (n, n)
+
+        r_dia = board.reverse_diagonal()
+        if self.is_run(r_dia, marker):
+            n = r_dia.index(None)
+            return (n, (N-1) - n)
+
+        return None
 
     def move(self, board: Board, players: set) -> tuple:
-        comp_wins = self.get_winning_move(board, self.mark)
-        if comp_wins:
-            return comp_wins
+        for marker in players:
+            move = self.winning_move(board, marker)
 
-        opp_will_win = self.get_winning_move(board,
-                                             'X' if self.mark == 'O' else 'O')
-        if opp_will_win:
-            return opp_will_win
+            if isinstance(move, tuple):  # winning move found
+                if marker == self.marker:
+                    return move  # bot wins
+                else:
+                    break  # opponent wins
+        else:
+            # only runs if no win was found (no break or return hit)
+            return random.choice(board.vacancies())  # if nobody will win guess
 
-        return random.choice(board.vacancies())
+        return move  # block opponent
 
 
 class BotMinmax(BotDefensive):
@@ -153,7 +204,7 @@ class BotMinmax(BotDefensive):
         state = self.evaluate_state(board)
 
         if state[0] == 'win':
-            return 10 if state[1] == self.mark else -10
+            return 10 if state[1] == self.marker else -10
         if state[0] == 'draw':
             return 0
 
@@ -180,9 +231,9 @@ class BotMinmax(BotDefensive):
 
         for move in empty_spots:
             temp_board = [row.copy() for row in board]
-            temp_board[move[1]][move[0]] = self.mark
+            temp_board[move[1]][move[0]] = self.marker
             move_scores[move] = self.minimax(temp_board,
-                                             'O' if self.mark == 'X' else 'X',
+                                             'O' if self.marker == 'X' else 'X',
                                              'min')
 
         target_score = max(move_scores.values())

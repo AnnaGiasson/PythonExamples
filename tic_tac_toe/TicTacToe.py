@@ -1,4 +1,4 @@
-from Players import BotRandom, BotDefensive, BotMinmax, User
+import Players
 from Board import Board
 # from typing import List
 import TerminalView as View
@@ -9,6 +9,9 @@ class TicTacToe():
     def __init__(self, **kwargs) -> None:
         self.players = {}
         self.board = Board(n=kwargs.get('n', 3))
+
+    def __del__(self) -> None:
+        View.close()
 
     @property
     def win(self) -> bool:
@@ -24,12 +27,14 @@ class TicTacToe():
         for m in self.players:
             if any(map(lambda case: case.count(m) == n, cases)):
                 return True
-        else:
-            return False
+        return False
 
     @property
     def in_progress(self) -> bool:
         return (not self.win) and (len(self.board.vacancies()) > 0)
+
+    def is_bot(self, player: Players.TicTacToe_Player) -> bool:
+        return not isinstance(player, Players.User)
 
     def run_session(self) -> None:
 
@@ -40,22 +45,31 @@ class TicTacToe():
 
             marker, player = next(player_iter)
 
-            View.player_turn(marker, bot_player=not isinstance(player, User))
+            View.player_turn(marker, bot_player=self.is_bot(player))
             View.display_board(self.board)
 
-            coords = player.move(self.board,
-                                 players=set(self.players.keys()))
+            while True:
+                try:
+                    coords = player.move(self.board,
+                                         players=set(self.players.keys()))
+                    break
+                except Players.UserExit:
+                    pass
+                except Players.UserHelp:
+                    pass
+                except Players.UserInvalidCommand:
+                    View.invalid_input()
+                    continue
+                except Players.UserInvalidMove:
+                    View.invalid_move()
+                    continue
 
             self.board.set_elem(*coords, marker)
 
         View.game_over()
         View.display_board(self.board)
-        if self.win:
-            View.victory(marker)
-        else:
-            View.draw()
-
-        return None
+        View.final_result(marker, win=self.win)
+        _ = input()
 
     @staticmethod
     def process_input(user_input) -> str:
@@ -63,7 +77,9 @@ class TicTacToe():
         inp = inp.lower()
         return inp
 
-    def menu_new_game(self) -> list[int, int, str, str]:
+    def menu_new_game(self) -> tuple[int, int, str, str]:
+
+        View.new_game()
 
         # number of players
         View.select_human_players()
@@ -134,7 +150,7 @@ class TicTacToe():
 
         return n_humans, n_bots, strategy, markers
 
-    def start_game(self) -> None:
+    def start(self) -> None:
 
         # Start
         View.start_screen()
@@ -167,14 +183,17 @@ class TicTacToe():
                 n_humans, n_bots, strategy, markers = self.menu_new_game()
 
                 #   assign players
-                bot = {'random': BotRandom,
-                       'defensive': BotDefensive,
-                       'minmax': BotMinmax}
-                for i, m in enumerate(markers):
-                    if i < n_humans:
-                        self.players[m] = User(m)
-                    elif i >= n_humans:
+                bot = {'random': Players.BotRandom,
+                       'defensive': Players.BotDefensive,
+                       'minmax': Players.BotMinmax}
+
+                for m in markers:
+                    if n_humans:
+                        self.players[m] = Players.User(m)
+                        n_humans -= 1
+                    elif n_bots:
                         self.players[m] = bot[strategy](m)
+                        n_bots -= 1
 
             # start
             self.run_session()
@@ -184,5 +203,5 @@ class TicTacToe():
 
 if __name__ == "__main__":
     game_session = TicTacToe(n=3)
-    game_session.start_game()
+    game_session.start()
     pass

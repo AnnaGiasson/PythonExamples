@@ -1,6 +1,5 @@
 from typing import Union
 from abc import ABC, abstractmethod
-# from itertools import product
 
 
 class Abstract_Board(ABC):
