@@ -129,4 +129,4 @@ dmypy.json
 .pyre/
 
 # debug configs
-.vscode/launch.json
+.vscode/

@@ -68,7 +68,7 @@ def select_strategy() -> None:
           '\t("0", "Easy", "Random"): Chooses a free space at random',
 
           '\t("1", "Medium", "Defensive"): Will try to block another'
-          ' player from winning, otherwise chooses randomly'
+          ' player from winning, otherwise chooses randomly',
 
           '\t("2", "Hard", "Minimax"): uses a MinMax strategy to pick a'
           ' space that results in the highest likelihood of winning, plays'

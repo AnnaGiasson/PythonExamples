@@ -2,7 +2,7 @@ import Players
 from Board import Board
 import TerminalView as View
 from itertools import cycle
-# from typing import List
+from typing import Dict
 
 
 class TicTacToe():
@@ -78,7 +78,9 @@ class TicTacToe():
         inp = inp.lower()
         return inp
 
-    def menu_new_game(self) -> tuple[int, int, str, str]:
+    def menu_new_game(self) -> Dict:
+
+        options = {}
 
         View.new_game()
 
@@ -88,8 +90,8 @@ class TicTacToe():
             user_input = self.process_input(input())
 
             if user_input.isnumeric():
-                n_humans = int(user_input)
-                if (0 <= n_humans <= 10):
+                options['n_humans'] = int(user_input)
+                if (0 <= options['n_humans'] <= 10):
                     break
             View.invalid_input()
 
@@ -99,45 +101,45 @@ class TicTacToe():
             user_input = self.process_input(input())
 
             if user_input.isnumeric():
-                n_bots = int(user_input)
-                if (0 <= n_bots <= 10):
+                options['n_bots'] = int(user_input)
+                if (0 <= options['n_bots'] <= 10):
                     break
             View.invalid_input()
 
         # computer strategy
-        if n_bots > 0:
+        if options['n_bots'] > 0:
 
             View.select_strategy()
             while True:
                 user_input = self.process_input(input())
 
                 if user_input in ('0', 'easy', 'random', 'r', 'e'):
-                    strategy = 'random'
+                    options['strategy'] = 'random'
                     break
                 elif user_input in ('1', 'medium', 'defensive', 'd', 'med'):
-                    strategy = 'defensive'
+                    options['strategy'] = 'defensive'
                     break
                 elif user_input in ('2', 'hard', 'minmax', 'min', 'max', 'h'):
-                    strategy = 'minmax'
-                    if n_bots <= 1:
+                    options['strategy'] = 'minmax'
+                    if options['n_bots'] <= 1:
                         break
-                    View.invalid_configuration(n_bots=n_bots,
-                                               strategy=strategy)
+                    View.invalid_configuration(n_bots=options['n_bots'],
+                                               strategy=options['strategy'])
                     continue
 
                 View.invalid_input()
 
         else:
-            strategy = ''
+            options['strategy'] = ''
 
         # markers
-        View.select_markers(n_humans + n_bots)
+        View.select_markers(options['n_humans'] + options['n_bots'])
         while True:
             user_input = input()
             markers = user_input.replace(' ', '').replace('\t', '')
 
             incorrect_number, repeats = False, False
-            if len(markers) != (n_humans + n_bots):
+            if len(markers) != (options['n_humans'] + options['n_bots']):
                 incorrect_number = True
             if len(set(markers)) != len(markers):
                 repeats = True
@@ -148,8 +150,9 @@ class TicTacToe():
                 continue
             else:
                 break
+        options['markers'] = markers
 
-        return n_humans, n_bots, strategy, markers
+        return options
 
     def start(self) -> None:
 
@@ -181,20 +184,21 @@ class TicTacToe():
                 self.players.clear()
 
                 # New Game
-                n_humans, n_bots, strategy, markers = self.menu_new_game()
+                game_options = self.menu_new_game()
+                # n_humans, n_bots, strategy, markers = self.menu_new_game()
 
                 #   assign players
                 bot = {'random': Players.BotRandom,
                        'defensive': Players.BotDefensive,
                        'minmax': Players.BotMinmax}
 
-                for m in markers:
-                    if n_humans:
+                for m in game_options['markers']:
+                    if game_options['n_humans']:
                         self.players[m] = Players.User(m)
-                        n_humans -= 1
-                    elif n_bots:
-                        self.players[m] = bot[strategy](m)
-                        n_bots -= 1
+                        game_options['n_humans'] -= 1
+                    elif game_options['n_bots']:
+                        self.players[m] = bot[game_options['strategy']](m)
+                        game_options['n_bots'] -= 1
 
             # start
             self.run_session()
