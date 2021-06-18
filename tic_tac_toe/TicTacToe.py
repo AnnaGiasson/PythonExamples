@@ -1,11 +1,12 @@
 import Players
 from Board import Board
-# from typing import List
 import TerminalView as View
 from itertools import cycle
+# from typing import List
 
 
 class TicTacToe():
+
     def __init__(self, **kwargs) -> None:
         self.players = {}
         self.board = Board(n=kwargs.get('n', 3))
@@ -204,4 +205,3 @@ class TicTacToe():
 if __name__ == "__main__":
     game_session = TicTacToe(n=3)
     game_session.start()
-    pass

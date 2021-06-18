@@ -42,7 +42,8 @@ class User(TicTacToe_Player):
         return 'human'
 
     @staticmethod
-    def _coord_xfmr(x: int, y: int, board_size: int, reverse: bool = False) -> Tuple[int, int]:
+    def _coord_xfmr(x: int, y: int, board_size: int,
+                    reverse: bool = False) -> Tuple[int, int]:
         if reverse:
             return (x + 1, board_size - y)
         else:
@@ -61,11 +62,10 @@ class User(TicTacToe_Player):
 
         return coords
 
-    @staticmethod
-    def _check_coordinates(x: int, y: int, board: Board) -> None:
+    def _check_coordinates(self, x: int, y: int, board: Board) -> None:
         if any(not (1 <= i <= board.board_size) for i in (x, y)):
             raise UserInvalidMove('Coordinates are not on the board')
-        if (x, y) not in board.vacancies():
+        if self._coord_xfmr(x, y, board.board_size) not in board.vacancies():
             raise UserInvalidMove('Space is already Occupied')
 
     def _user_commands(self, user_input: str, board: Board) -> None:
@@ -102,11 +102,6 @@ class BotDefensive(TicTacToe_Player):
     @property
     def strategy(self):
         return 'Defensive'
-
-    def index_board(self, board):
-        for y, row in enumerate(board):
-            for x, elem in enumerate(row):
-                yield (x, y), elem
 
     @staticmethod
     def is_run(sequence: tuple, marker: str) -> bool:
@@ -163,7 +158,12 @@ class BotDefensive(TicTacToe_Player):
         return move  # block opponent
 
 
-class BotMinmax(BotDefensive):
+class BotMinmax(TicTacToe_Player):
+
+    def index_board(self, board):
+        for y, row in enumerate(board):
+            for x, elem in enumerate(row):
+                yield (x, y), elem
 
     @property
     def strategy(self):
