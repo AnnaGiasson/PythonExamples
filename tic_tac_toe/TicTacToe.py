@@ -9,7 +9,6 @@ class TicTacToe():
 
     def __init__(self, **kwargs) -> None:
         self.players = {}
-        self.board = Board(n=kwargs.get('n', 3))
 
     def __del__(self) -> None:
         View.close()
@@ -52,7 +51,7 @@ class TicTacToe():
             while True:
                 try:
                     coords = player.move(self.board,
-                                         players=set(self.players.keys()))
+                                         players=self.players)
                     break
                 except Players.UserExit:
                     pass
@@ -83,6 +82,20 @@ class TicTacToe():
         options = {}
 
         View.new_game()
+
+        # board size
+        View.select_board_size()
+        while True:
+            user_input = self.process_input(input())
+
+            if user_input.isnumeric():
+                options['board_size'] = int(user_input)
+                if (2 <= options['board_size'] <= 100):
+                    break
+            elif user_input == '':
+                options['board_size'] = 3
+                break
+            View.invalid_input()
 
         # number of players
         View.select_human_players()
@@ -162,11 +175,11 @@ class TicTacToe():
 
         initial_run = True
         reset = True
-        while True:
+        while True:  # event loop
 
             # Menu
             View.menu(init=initial_run)
-            while True:
+            while True:  # menu loop
 
                 user_input = self.process_input(input())
                 # menu branch
@@ -174,7 +187,7 @@ class TicTacToe():
                     break
                 elif user_input in ('0', 'end', 'quit', 'q', 'exit'):
                     return None
-                elif user_input in ('2', 'reset', 're-run', 'again', 'r'):
+                elif user_input in ('2', 'restart', 'reset', 're-run', 'r'):
                     reset = False
                     break
                 View.invalid_input()
@@ -185,7 +198,13 @@ class TicTacToe():
 
                 # New Game
                 game_options = self.menu_new_game()
-                # n_humans, n_bots, strategy, markers = self.menu_new_game()
+
+                if hasattr(self, 'board'):
+                    if game_options['board_size'] != self.board.board_size:
+                        del self.board
+                        self.board = Board(n=game_options['board_size'])
+                else:
+                    self.board = Board(n=game_options['board_size'])
 
                 #   assign players
                 bot = {'random': Players.BotRandom,
@@ -207,5 +226,5 @@ class TicTacToe():
 
 
 if __name__ == "__main__":
-    game_session = TicTacToe(n=3)
+    game_session = TicTacToe()
     game_session.start()

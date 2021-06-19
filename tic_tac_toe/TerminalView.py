@@ -33,7 +33,7 @@ def start_screen() -> None:
     _clear()
     print('Tic-Tac-Toe\n',
           'Type any key and press "Enter" to start a new game...\n',
-          '-----------------------------------------------------',
+          '-----------------------------------------------------\n',
           sep='\n')
 
 
@@ -52,11 +52,16 @@ def new_game() -> None:
 
 
 def select_human_players() -> None:
-    print('\nEnter number of human players (0:10)')
+    print('\nEnter number of human players (0:10)\n')
+
+
+def select_board_size() -> None:
+    print('\nEnter a board width (2-100)',
+          'Omit to play with width = 3\n', sep='\n')
 
 
 def select_bot_players() -> None:
-    print('\nEnter number of computer players (0:10)')
+    print('\nEnter number of computer players (0:10)\n')
 
 
 def select_strategy() -> None:
@@ -74,7 +79,7 @@ def select_strategy() -> None:
           ' space that results in the highest likelihood of winning, plays'
           ' against itself recursively to determine the odds. Only'
           ' availible when using 1 computer player in order to limit'
-          ' computation time' + not_imp, '\n',
+          ' computation time' + not_imp + '\n',
           sep='\n')
 
 
@@ -82,8 +87,8 @@ def select_markers(total_players: int) -> None:
     print('\nEnter a set of markers to use to mark each players space',
           'Markers can be any non-whitespace ASCII character (case'
           ' sensitive), but should not repeat and the number of unique'
-          ' markers should match the total number of players\n'
-          f' ({total_players})', '\n', sep='\n')
+          ' markers should match the total number of players'
+          f' ({total_players})\n', sep='\n')
 
 
 def player_turn(marker: str, bot_player: bool) -> None:

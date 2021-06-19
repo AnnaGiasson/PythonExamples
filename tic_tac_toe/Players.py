@@ -1,5 +1,6 @@
 import random
 from abc import ABC, abstractmethod, abstractproperty
+from itertools import product, cycle
 from typing import Union, Tuple
 from Board import Board
 import re
@@ -15,7 +16,7 @@ class TicTacToe_Player(ABC):
         pass
 
     @abstractmethod
-    def move(board: Board, players: set) -> tuple:
+    def move(board: Board, players: dict) -> tuple:
         pass
 
 
@@ -76,7 +77,7 @@ class User(TicTacToe_Player):
         elif user_input == 'help':
             raise UserHelp('"Help" command issued by user')
 
-    def move(self, board: Board, players: set) -> tuple:
+    def move(self, board: Board, players: dict) -> tuple:
 
         user_input = input().strip().lower()
 
@@ -93,7 +94,7 @@ class BotRandom(TicTacToe_Player):
     def strategy(self):
         return 'random'
 
-    def move(self, board: Board, players: set) -> tuple:
+    def move(self, board: Board, players: dict) -> tuple:
         return random.choice(board.vacancies())
 
 
@@ -142,28 +143,28 @@ class BotDefensive(TicTacToe_Player):
 
         return None
 
-    def move(self, board: Board, players: set) -> tuple:
-        for marker in players:
-            move = self.winning_move(board, marker)
+    def move(self, board: Board, players: dict) -> tuple:
+        for marker in set(players.keys()):
+            coords = self.winning_move(board, marker)
 
-            if isinstance(move, tuple):  # winning move found
+            if isinstance(coords, tuple):  # winning move found
                 if marker == self.marker:
-                    return move  # bot wins
+                    return coords  # bot wins
                 else:
                     break  # opponent wins
         else:
             # only runs if no win was found (no break or return hit)
             return random.choice(board.vacancies())  # if nobody will win guess
 
-        return move  # block opponent
+        return coords  # block opponent
 
 
 class BotMinmax(TicTacToe_Player):
 
-    def index_board(self, board):
-        for y, row in enumerate(board):
-            for x, elem in enumerate(row):
-                yield (x, y), elem
+    # def index_board(self, board):
+    #     for y, row in enumerate(board):
+    #         for x, elem in enumerate(row):
+    #             yield (x, y), elem
 
     @property
     def strategy(self):
@@ -223,21 +224,34 @@ class BotMinmax(TicTacToe_Player):
         elif mode == 'min':
             return min(move_scores.values())
 
-    def move(self, board: Board, players: set) -> tuple:
+    @staticmethod
+    def copy_board(board: Board) -> Board:
+        N = board.board_size
+        board_copy = Board(n=N)
+        for x, y in product(range(N), range(N)):
+            board_copy.set_elem(x, y, board.get_elem(x, y))
+        return board_copy
 
-        board_spots = self.index_board(board)
-        empty_spots = [coords for coords, mark in board_spots if mark == ' ']
-        move_scores = {}
+    def move(self, board: Board, players: dict) -> tuple:
 
-        for move in empty_spots:
-            temp_board = [row.copy() for row in board]
+        # create player turn iterator
+        player_iter = cycle(players.items())
+
+        # advance iter to the correct state (should be THIS bot's turn)
+        while self.marker != (_ := next(player_iter)):
+            pass
+
+        scores = {}  # heuristic for each possible move at this turn
+
+        for move in board.vacancies():
+            temp_board = self.copy_board(board)
             temp_board[move[1]][move[0]] = self.marker
-            move_scores[move] = self.minimax(temp_board,
-                                             'O' if self.marker == 'X' else 'X',
-                                             'min')
+            scores[move] = self.minimax(temp_board,
+                                        'O' if self.marker == 'X' else 'X',
+                                        'min')
 
-        target_score = max(move_scores.values())
-        for move, score in move_scores.items():
+        target_score = max(scores.values())
+        for move, score in scores.items():
             if score == target_score:
                 return move
 
