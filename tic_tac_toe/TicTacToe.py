@@ -7,6 +7,8 @@ from typing import Dict
 
 class TicTacToe():
 
+    supported_bots = {agent.keys(): agent for agent in Players.valid_agents}
+
     def __init__(self, **kwargs) -> None:
         self.players = {}
 
@@ -34,24 +36,31 @@ class TicTacToe():
         return (not self.win) and (len(self.board.vacancies()) > 0)
 
     def is_bot(self, player: Players.TicTacToe_Player) -> bool:
-        return not isinstance(player, Players.User)
+        val = issubclass(player, Players.TicTacToe_Player)
+        val &= (not issubclass(player, Players.User))
+        return val
+
+    def is_bot_instance(self, player: Players.TicTacToe_Player) -> bool:
+        val = isinstance(player, Players.TicTacToe_Player)
+        val &= (not isinstance(player, Players.User))
+        return val
 
     def run_session(self) -> None:
 
         self.board.reset()
         player_iter = cycle(self.players.items())
+        player_list = list(self.players.keys())
 
         while self.in_progress:
 
             marker, player = next(player_iter)
 
-            View.player_turn(marker, bot_player=self.is_bot(player))
+            View.player_turn(marker, bot_player=self.is_bot_instance(player))
             View.display_board(self.board)
 
             while True:
                 try:
-                    coords = player.move(self.board,
-                                         players=self.players)
+                    coords = player.move(self.board, players=player_list)
                     break
                 except Players.UserExit:
                     pass
@@ -122,25 +131,18 @@ class TicTacToe():
         # computer strategy
         if options['n_bots'] > 0:
 
-            View.select_strategy()
-            while True:
+            supported_agents = self.supported_bots.items()
+            bots = {k: a for k, a in supported_agents if self.is_bot(a)}
+            View.select_strategy(bots)
+            while options.get('strategy') is None:
                 user_input = self.process_input(input())
 
-                if user_input in ('0', 'easy', 'random', 'r', 'e'):
-                    options['strategy'] = 'random'
-                    break
-                elif user_input in ('1', 'medium', 'defensive', 'd', 'med'):
-                    options['strategy'] = 'defensive'
-                    break
-                elif user_input in ('2', 'hard', 'minmax', 'min', 'max', 'h'):
-                    options['strategy'] = 'minmax'
-                    if options['n_bots'] <= 1:
+                for keys, agent in bots.items():
+                    if user_input in (k.lower() for k in keys):
+                        options['strategy'] = agent.keys()
                         break
-                    View.invalid_configuration(n_bots=options['n_bots'],
-                                               strategy=options['strategy'])
-                    continue
-
-                View.invalid_input()
+                else:
+                    View.invalid_input()
 
         else:
             options['strategy'] = ''
@@ -207,16 +209,18 @@ class TicTacToe():
                     self.board = Board(n=game_options['board_size'])
 
                 #   assign players
-                bot = {'random': Players.BotRandom,
-                       'defensive': Players.BotDefensive,
-                       'minmax': Players.BotMinmax}
+                # bot = {'random': Players.BotRandom,
+                #        'defensive': Players.BotDefensive,
+                #        'maximumlikelihood': Players.BotMaxLikelihood,
+                #        }
 
-                for m in game_options['markers']:
+                for marker in game_options['markers']:
                     if game_options['n_humans']:
-                        self.players[m] = Players.User(m)
+                        self.players[marker] = Players.User(marker)
                         game_options['n_humans'] -= 1
                     elif game_options['n_bots']:
-                        self.players[m] = bot[game_options['strategy']](m)
+                        agent = self.supported_bots[game_options['strategy']]
+                        self.players[marker] = agent(marker)
                         game_options['n_bots'] -= 1
 
             # start

@@ -1,12 +1,14 @@
 import random
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty, abstractstaticmethod
 from itertools import product, cycle
-from typing import Union, Tuple
+from typing import Iterable, Union, Tuple
 from Board import Board
 import re
 
 
 class TicTacToe_Player(ABC):
+
+    description: Tuple[str]
 
     def __init__(self, marker) -> None:
         self.marker = marker
@@ -14,6 +16,10 @@ class TicTacToe_Player(ABC):
     @abstractproperty
     def strategy():
         pass
+
+    @abstractstaticmethod
+    def keys() -> Tuple[str]:
+        return
 
     @abstractmethod
     def move(board: Board, players: dict) -> tuple:
@@ -38,9 +44,18 @@ class UserInvalidMove(Exception):
 
 class User(TicTacToe_Player):
 
+    description = (
+                   'Relies on the intelligence of a Human or other',
+                   'intelligent agent to determine the best move'
+                   )
+
     @property
     def strategy(self):
         return 'human'
+
+    @staticmethod
+    def keys() -> Tuple[str]:
+        return ("3", 'Human', 'General Intelligence', 'Agent', 'AI')
 
     @staticmethod
     def _coord_xfmr(x: int, y: int, board_size: int,
@@ -90,19 +105,34 @@ class User(TicTacToe_Player):
 
 class BotRandom(TicTacToe_Player):
 
+    description = ('Chooses a free space at random.',)
+
     @property
-    def strategy(self):
+    def strategy(self) -> str:
         return 'random'
 
-    def move(self, board: Board, players: dict) -> tuple:
+    @staticmethod
+    def keys() -> Tuple[str]:
+        return ("0", "Easy", "Random")
+
+    def move(self, board: Board, players: list) -> tuple:
         return random.choice(board.vacancies())
 
 
 class BotDefensive(TicTacToe_Player):
 
+    description = (
+                   'Will try to block another player from winning, otherwise',
+                   'chooses randomly.'
+                   )
+
     @property
     def strategy(self):
         return 'Defensive'
+
+    @staticmethod
+    def keys() -> Tuple[str]:
+        return ("1", "Medium", "Defensive")
 
     @staticmethod
     def is_run(sequence: tuple, marker: str) -> bool:
@@ -143,8 +173,8 @@ class BotDefensive(TicTacToe_Player):
 
         return None
 
-    def move(self, board: Board, players: dict) -> tuple:
-        for marker in set(players.keys()):
+    def move(self, board: Board, players: list) -> tuple:
+        for marker in players:
             coords = self.winning_move(board, marker)
 
             if isinstance(coords, tuple):  # winning move found
@@ -159,46 +189,46 @@ class BotDefensive(TicTacToe_Player):
         return coords  # block opponent
 
 
-class BotMinmax(TicTacToe_Player):
+class BotMaxLikelihood(TicTacToe_Player):
 
-    # def index_board(self, board):
-    #     for y, row in enumerate(board):
-    #         for x, elem in enumerate(row):
-    #             yield (x, y), elem
+    SCORE_WIN = 1000
+    SCORE_LOSS = -1000
+    SCORE_DRAW = 100
+    SCORE_PER_TURN = -1
+
+    description = (
+                   'selects its next move by choosing the move which yields',
+                   'the maximum likelihood of winning based on a heuristic',
+                   'scoring function. This Bot plays against itself',
+                   'recursively to determine the likelihood of winning for',
+                   'all possible future moves and is, therefore, more memory',
+                   'and is more computationally expensize. May have long',
+                   'run-times on large boards.',
+                  )
 
     @property
     def strategy(self):
         return 'Minmax'
 
-    def evaluate_state(self, board):
+    @staticmethod
+    def keys() -> Tuple[str]:
+        return ("2", "Hard", "Maximum Likelihood", "Heuristic")
 
-        board_spots = list(self.index_board(board))
+    @staticmethod
+    def is_victory(board: Board, players: set) -> bool:
 
-        # check if a player won
-        for move in ['X', 'O']:
-            all_marks = list(filter(lambda pos: pos[1] == move, board_spots))
+        n = board.board_size
 
-            for y in range(len(board)):  # check rows
-                if [coord[1] for coord, _ in all_marks].count(y) == 3:
-                    return ('win', move)
+        cases = []
+        cases.extend(board.row(y) for y in range(n))
+        cases.extend(board.column(x) for x in range(n))
+        cases.append(board.diagonal())
+        cases.append(board.reverse_diagonal())
 
-            for x in range(len(board[0])):  # check columns
-                if [coord[0] for coord, _ in all_marks].count(x) == 3:
-                    return ('win', move)
-
-            # check main diagonal
-            if [co[0] == co[1] for co, _ in all_marks].count(True) == 3:
-                return ('win', move)
-            # check reverse diagonal
-            if [co[0] == 2 - co[1] for co, _ in all_marks].count(True) == 3:
-                return ('win', move)
-
-        # check if a draw
-        empty_spots = [coords for coords, mark in board_spots if mark == ' ']
-        if not empty_spots:
-            return ('draw', '')
-        else:
-            return ('', '')  # game still in progress
+        for m in players:
+            if any(map(lambda case: case.count(m) == n, cases)):
+                return True
+        return False
 
     def minimax(self, board, turn, mode):
 
@@ -232,28 +262,79 @@ class BotMinmax(TicTacToe_Player):
             board_copy.set_elem(x, y, board.get_elem(x, y))
         return board_copy
 
-    def move(self, board: Board, players: dict) -> tuple:
+    @staticmethod
+    def iterate_players(set_marker: str, players: list) -> cycle:
+
+        if set_marker not in players:
+            raise ValueError('Can not set the turn to a non-existent player')
+
+        # determine the marker that occurs before "set_marker" so the iterator
+        # can be stopped so the "set_marker" will be the next value.
+        preceeding_marker = players[players.index(set_marker) - 1]
 
         # create player turn iterator
-        player_iter = cycle(players.items())
+        player_iter = cycle(players)
 
-        # advance iter to the correct state (should be THIS bot's turn)
-        while self.marker != (_ := next(player_iter)):
+        # advance iter to the correct state (set_marker)
+        while next(player_iter)[0] != preceeding_marker:
             pass
 
-        scores = {}  # heuristic for each possible move at this turn
+        return player_iter
 
-        for move in board.vacancies():
+    @staticmethod
+    def average(values: Iterable) -> float:
+        N = len(values)
+        return sum(values)/N
+
+    def walk_move_tree(self, coordinates: tuple, board: Board,
+                       player_iter: cycle, player_set: set) -> int:
+
+        # make a move
+        marker = next(player_iter)
+        board.set_elem(*coordinates, marker)
+
+        if self.is_victory(board, player_set):  # win or lose
+            if (marker == self.marker):
+                return self.SCORE_WIN
+            else:
+                return self.SCORE_LOSS
+
+        if len(board.vacancies()) == 0:  # draw
+            return self.SCORE_DRAW
+
+        child_node_scores = []
+        for coord in board.vacancies():
+            new_iter = self.iterate_players(marker, player_set)
+            _ = next(new_iter)
+            score = self.walk_move_tree(coord,
+                                        self.copy_board(board), new_iter,
+                                        player_set)
+            child_node_scores.append(score - self.SCORE_PER_TURN)
+
+        return self.average(child_node_scores)
+
+    def move(self, board: Board, players: list) -> tuple:
+
+        # generate heuristics for each possible move at this turn
+        heuristics = {}
+        for coords in board.vacancies():
+
+            # create player turn iterator
+            player_iter = self.iterate_players(self.marker, players)
+
+            # copy of the current board state
             temp_board = self.copy_board(board)
-            temp_board[move[1]][move[0]] = self.marker
-            scores[move] = self.minimax(temp_board,
-                                        'O' if self.marker == 'X' else 'X',
-                                        'min')
 
-        target_score = max(scores.values())
-        for move, score in scores.items():
-            if score == target_score:
-                return move
+            score = self.walk_move_tree(coords, temp_board, player_iter,
+                                        players)
+            if score not in heuristics:
+                heuristics[score] = coords
+
+        # choose the move the yields the highest score
+        return heuristics[max(heuristics)]
+
+
+valid_agents = (BotRandom, BotDefensive, BotMaxLikelihood, User)
 
 
 if __name__ == '__main__':

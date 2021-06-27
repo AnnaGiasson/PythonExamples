@@ -1,4 +1,6 @@
+from typing import Dict, Tuple
 from Board import Board
+from Players import TicTacToe_Player
 import os
 
 
@@ -64,23 +66,12 @@ def select_bot_players() -> None:
     print('\nEnter number of computer players (0:10)\n')
 
 
-def select_strategy() -> None:
+def select_strategy(valid_agents: Dict[Tuple, TicTacToe_Player]) -> None:
 
-    not_imp = ' (Not Implemented)'
-
-    print('\nChoose computer strategy:\n',
-
-          '\t("0", "Easy", "Random"): Chooses a free space at random',
-
-          '\t("1", "Medium", "Defensive"): Will try to block another'
-          ' player from winning, otherwise chooses randomly',
-
-          '\t("2", "Hard", "Minimax"): uses a MinMax strategy to pick a'
-          ' space that results in the highest likelihood of winning, plays'
-          ' against itself recursively to determine the odds. Only'
-          ' availible when using 1 computer player in order to limit'
-          ' computation time' + not_imp + '\n',
-          sep='\n')
+    pad = "\n\t\t"
+    print('\nChoose computer strategy:\n')
+    for keys, agent in valid_agents.items():
+        print(f'\t{keys}\n\t\t{pad.join(agent.description)}\n')
 
 
 def select_markers(total_players: int) -> None:
