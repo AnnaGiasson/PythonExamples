@@ -14,7 +14,7 @@ class Calculator():
     in the variable 'ans'.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.variables = {}
         self.valid_commands = {'/exit': 'Bye!',
                                '/help': self.__doc__}
@@ -29,9 +29,8 @@ class Calculator():
 
         self.status = False
         self.unknown_var = False
-        return None
 
-    def _continue_operator_stack_pop(self, operator_stack, tok):
+    def _continue_operator_stack_pop(self, operator_stack: deque, tok: str) -> bool:
         """
         only used in 'convert_to_rpn' when determining when to stop removing
         elements from the op stack. Logic was too complex to stick in the 'if'
@@ -55,7 +54,7 @@ class Calculator():
 
         return condition1 or condition2
 
-    def convert_to_rpn(self, infix_expression):
+    def convert_to_rpn(self, infix_expression: str) -> deque:
         """
         Implements Dijkstra's Shunting-yard algorithm to convert between infix
         and reverse-polish notations using a stack
@@ -95,7 +94,7 @@ class Calculator():
 
         return output_queue
 
-    def calculate(self, expression):
+    def calculate(self, expression: str) -> int:
         """
         Converts valid infix expressions to reverse polish notation then
         calculates and returns the resulting value
@@ -127,7 +126,7 @@ class Calculator():
 
         return comp_stack.pop()
 
-    def replace_variables(self, expression):
+    def replace_variables(self, expression: str) -> str:
         """Replaces known variables in an expression with their values"""
 
         for var in self.variables:
@@ -135,18 +134,18 @@ class Calculator():
                 expression = expression.replace(var, str(self.variables[var]))
         return expression
 
-    def resolve_op(self, op_str):
+    def resolve_op(self, op_str: str) -> str:
         """resolves non-unitary + and - operators to unitary operators"""
         if op_str.count('-') % 2 == 1:
             return '-'
         return '+'
 
-    def is_resolvable(self, op_queue):
+    def is_resolvable(self, op_queue: deque) -> bool:
         """checks a string of operators to see if it is a non-unitary + or -
         and therefore that it can be resolved"""
         return not bool(set(op_queue).difference({'+', '-'}))
 
-    def parse_input(self, user_input):
+    def parse_input(self, user_input: str) -> deque:
         """
         Parses an input expression splitting it into arguements, variables,
         operators, and parenthesis. Output is a queue ordered from left to
@@ -221,7 +220,7 @@ class Calculator():
 
         return out_queue
 
-    def is_valid_expression(self, expression):
+    def is_valid_expression(self, expression: str) -> bool:
         """parses through user inputs and validates syntax, returning a bool.
         If an uninitialized variable is present it also sets the instance var
         unknown_var to True"""
@@ -278,12 +277,12 @@ class Calculator():
 
         return True
 
-    def is_valid_var_name(self, var_name):
+    def is_valid_var_name(self, var_name: str) -> bool:
         if not var_name.isalpha():
             return False
         return True
 
-    def check_assignment(self, string):
+    def check_assignment(self, string: str) -> None:
         """
         checks if an assignment is valid and has proper syntax. if so it adds
         the name and value of the assignment to the instance namespace.
@@ -310,9 +309,8 @@ class Calculator():
             return None
 
         print('Invalid identifier')
-        return None
 
-    def check_command(self, string):
+    def check_command(self, string) -> bool:
         if string not in self.valid_commands:
             print('Unknown command')
             return False
@@ -324,7 +322,7 @@ class Calculator():
 
         return True
 
-    def handle_input(self, user_input):
+    def handle_input(self, user_input: str) -> None:
 
         if not user_input:  # check if blank
             return None
@@ -350,13 +348,11 @@ class Calculator():
             return None
 
         print('Invalid expression')
-        return None
 
-    def start_session(self):
+    def start_session(self) -> None:
         self.status = True
         while self.status:
             self.handle_input(input())
-        return None
 
 
 if __name__ == '__main__':
