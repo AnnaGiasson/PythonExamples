@@ -1,4 +1,5 @@
 from collections import deque
+import re
 
 
 class Calculator():
@@ -16,8 +17,8 @@ class Calculator():
 
     def __init__(self) -> None:
         self.variables = {}
-        self.valid_commands = {'/exit': 'Bye!',
-                               '/help': self.__doc__}
+        self.commands = {'/exit': 'Bye!',
+                         '/help': self.__doc__}
 
         # op: ("presidence in RPN", "associativity (Left/Right)")
         # presidence and associativity used to convert to RPN
@@ -311,11 +312,11 @@ class Calculator():
         print('Invalid identifier')
 
     def check_command(self, string) -> bool:
-        if string not in self.valid_commands:
+        if string not in self.commands:
             print('Unknown command')
             return False
 
-        print(self.valid_commands[string])
+        print(self.commands[string])
 
         if string == '/exit':
             self.status = False
@@ -349,10 +350,42 @@ class Calculator():
 
         print('Invalid expression')
 
+    def is_valid_input(self, user_input: str) -> bool:
+
+        # check if blank
+        if user_input == "":
+            return False
+
+        # check if command
+        if user_input.startswith('\\'):
+            return user_input.lstrip('\\') in self.commands
+
+        # check valid input
+        return self.is_valid_expression(user_input)
+
+
+    @ staticmethod
+    def santitize_input(user_input: str) -> str:
+        processed_input = user_input.strip()
+        return processed_input.replace(' ', '')
+
     def start_session(self) -> None:
+
         self.status = True
+
         while self.status:
-            self.handle_input(input())
+            try:
+                user_input = self.santitize_input(input())
+                if self.is_valid_input(user_input):
+                    self.handle_input(user_input)
+                else:
+                    raise
+            except UnknownVariableError:
+                print('Unknown variable')
+            except InvalidVariableError:
+                print('Unknown variable')
+            except UnknownCommandError:
+                print('Unknown command')
 
 
 if __name__ == '__main__':
