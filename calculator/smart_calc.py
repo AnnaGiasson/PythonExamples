@@ -1,5 +1,10 @@
 from collections import deque
 import re
+from collections import namedtuple
+
+
+Operator = namedtuple('Operator',
+                      ('presidence', 'associativity', 'leading_value'))
 
 
 class Calculator():
@@ -22,11 +27,12 @@ class Calculator():
 
         # op: ("presidence in RPN", "associativity (Left/Right)")
         # presidence and associativity used to convert to RPN
-        self.operators = {'+': (2, 'L'),
-                          '-': (2, 'L'),
-                          '*': (3, 'L'),
-                          '/': (3, 'L'),
-                          '^': (4, 'R')}
+        self.operators = {'+': Operator(2, 'L', 0),
+                          '-': Operator(2, 'L', 0),
+                          '*': Operator(3, 'L', None),
+                          '/': Operator(3, 'L', None),
+                          '^': Operator(4, 'R', None),
+                          }
 
         self.status = False
         self.unknown_var = False
@@ -46,12 +52,12 @@ class Calculator():
 
         condition1 = (top_op in self.operators)
         if condition1:  # if statement because ( and ) arent in self.operators
-            condition1 &= (self.operators[top_op][0] > self.operators[tok][0])
+            condition1 &= (self.operators[top_op]['presidence'] > self.operators[tok]['presidence'])
 
         condition2 = (top_op != '(')
         if condition2:  # if statement because ( and ) arent in self.operators
-            condition2 &= (self.operators[top_op][0] == self.operators[tok][0])
-            condition2 &= (self.operators[tok][1] == 'L')
+            condition2 &= (self.operators[top_op]['presidence'] == self.operators[tok]['presidence'])
+            condition2 &= (self.operators[tok]['associativity'] == 'L')
 
         return condition1 or condition2
 
@@ -145,6 +151,30 @@ class Calculator():
         """checks a string of operators to see if it is a non-unitary + or -
         and therefore that it can be resolved"""
         return not bool(set(op_queue).difference({'+', '-'}))
+
+    def parse_input(self, user_input: str) -> deque:
+        """
+        Parses an input expression string splitting it into arguements,
+        variables, operators, and parenthesis. Outputs a queue of operators and
+        arguements in infix notation. Non unitary + or - operators are
+        interpreted.
+        """
+
+        patterns = (
+                    re.compile('[a-zA-Z0-9.]+'),   # arguement pattern
+                    re.compile('[+\-*\/^=]+'),   # operator pattern
+                    re.compile('[()]'),   # separator pattern
+                    )
+
+        out_queue = deque()
+        idx = 0
+        while user_input[idx:-1]:
+            for patt in patterns:
+                match = re.match(patt[idx:-1], user_input)
+                if not match:  # no match found
+                    continue
+
+
 
     def parse_input(self, user_input: str) -> deque:
         """
