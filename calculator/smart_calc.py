@@ -291,9 +291,10 @@ class Calculator():
         unknown_var to True.
         """
 
-        assignment_idx = string.index('=')
-        var_name = string[:assignment_idx].strip()
-        var_expression = string[(assignment_idx+1):]
+        if string.count('=') > 1:
+            raise InvalidExpressionError("Too many '=' in assignment")
+
+        var_name, var_expression = string.split('=')
 
         if self.is_valid_var_name(var_name):
             if self.is_valid_expression(var_expression):
@@ -311,25 +312,16 @@ class Calculator():
 
         print('Invalid identifier')
 
-    def check_command(self, string) -> bool:
-        if string not in self.commands:
-            print('Unknown command')
-            return False
+    def run_command(self, string) -> None:
 
         print(self.commands[string])
-
-        if string == '/exit':
+        if "exit" in string:
             self.status = False
 
-        return True
+    def process_input(self, user_input: str) -> None:
 
-    def handle_input(self, user_input: str) -> None:
-
-        if not user_input:  # check if blank
-            return None
-
-        if user_input.startswith('/'):  # check if command
-            self.check_command(user_input)
+        if user_input.startswith('\\'):  # check if command
+            self.run_command(user_input)
             return None
 
         if '=' in user_input:  # check assignment
@@ -363,7 +355,6 @@ class Calculator():
         # check valid input
         return self.is_valid_expression(user_input)
 
-
     @ staticmethod
     def santitize_input(user_input: str) -> str:
         processed_input = user_input.strip()
@@ -377,15 +368,35 @@ class Calculator():
             try:
                 user_input = self.santitize_input(input())
                 if self.is_valid_input(user_input):
-                    self.handle_input(user_input)
+                    self.process_input(user_input)
                 else:
                     raise
             except UnknownVariableError:
                 print('Unknown variable')
             except InvalidVariableError:
-                print('Unknown variable')
+                print('Invalid variable')
             except UnknownCommandError:
                 print('Unknown command')
+
+
+class UnknownVariableError(Exception):
+    def __init__(self, message="Unknown variable", *args: object) -> None:
+        super().__init__(message, *args)
+
+
+class InvalidVariableError(Exception):
+    def __init__(self, message="Invalid variable", *args: object) -> None:
+        super().__init__(message, *args)
+
+
+class InvalidExpressionError(Exception):
+    def __init__(self, message="Invalid expression", *args: object) -> None:
+        super().__init__(message, *args)
+
+
+class UnknownCommandError(Exception):
+    def __init__(self, message="Unknown command", *args: object) -> None:
+        super().__init__(message, *args)
 
 
 if __name__ == '__main__':
