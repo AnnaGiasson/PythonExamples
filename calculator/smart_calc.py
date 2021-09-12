@@ -6,6 +6,9 @@ from collections import namedtuple
 Operator = namedtuple('Operator',
                       ('presidence', 'associativity', 'leading_value'))
 
+Command = namedtuple('Command',
+                     ('message', 'func'))
+
 
 class Calculator():
 
@@ -22,8 +25,11 @@ class Calculator():
 
     def __init__(self) -> None:
         self.variables = {}
-        self.commands = {'/exit': 'Bye!',
-                         '/help': self.__doc__}
+        self.commands = {'/exit': Command('Bye!', exit()),
+                         '/help': Command(self.__doc__, lambda: None),
+                         '/clear': Command('Variables Erased',
+                                           lambda: self.variables.clear()),
+                         }
 
         # op: ("presidence in RPN", "associativity (Left/Right)")
         # presidence and associativity used to convert to RPN
@@ -34,8 +40,7 @@ class Calculator():
                           '^': Operator(4, 'R', None),
                           }
 
-        self.status = False
-        self.unknown_var = False
+        self.input_queue = deque()
 
     def _continue_operator_stack_pop(self, operator_stack: deque, tok: str) -> bool:
         """
@@ -52,12 +57,12 @@ class Calculator():
 
         condition1 = (top_op in self.operators)
         if condition1:  # if statement because ( and ) arent in self.operators
-            condition1 &= (self.operators[top_op]['presidence'] > self.operators[tok]['presidence'])
+            condition1 &= (self.operators[top_op].presidence > self.operators[tok].presidence)
 
         condition2 = (top_op != '(')
         if condition2:  # if statement because ( and ) arent in self.operators
-            condition2 &= (self.operators[top_op]['presidence'] == self.operators[tok]['presidence'])
-            condition2 &= (self.operators[tok]['associativity'] == 'L')
+            condition2 &= (self.operators[top_op].presidence == self.operators[tok].presidence)
+            condition2 &= (self.operators[tok].associativity == 'L')
 
         return condition1 or condition2
 
@@ -108,7 +113,7 @@ class Calculator():
         """
 
         # top of input and comp stack is the left
-        input_stack = self.convert_to_rpn(self.replace_variables(expression))
+        input_stack = self.convert_to_rpn(expression)
         comp_stack = deque()
 
         while input_stack:
@@ -133,24 +138,15 @@ class Calculator():
 
         return comp_stack.pop()
 
-    def replace_variables(self, expression: str) -> str:
-        """Replaces known variables in an expression with their values"""
-
-        for var in self.variables:
-            if var in expression:
-                expression = expression.replace(var, str(self.variables[var]))
-        return expression
-
     def resolve_op(self, op_str: str) -> str:
         """resolves non-unitary + and - operators to unitary operators"""
-        if op_str.count('-') % 2 == 1:
-            return '-'
-        return '+'
+        if len(op_str) == 1:
+            return op_str
 
-    def is_resolvable(self, op_queue: deque) -> bool:
-        """checks a string of operators to see if it is a non-unitary + or -
-        and therefore that it can be resolved"""
-        return not bool(set(op_queue).difference({'+', '-'}))
+        if any(op in op_str for op in '*/^'):
+            raise InvalidExpressionError(f'Invalid operator {op_str}')
+
+        return '-' if (op_str.count('-') % 2 == 1) else '+'
 
     def parse_input(self, user_input: str) -> deque:
         """
@@ -160,103 +156,41 @@ class Calculator():
         interpreted.
         """
 
-        patterns = (
-                    re.compile('[a-zA-Z0-9.]+'),   # arguement pattern
-                    re.compile('[+\-*\/^=]+'),   # operator pattern
-                    re.compile('[()]'),   # separator pattern
-                    )
+        # name: (regex pattern, processing func)
+        patterns = {
+                    'arg': (re.compile(r'\d+|\d+\.\d*|\.\d*'),
+                            float),
+                    'var': (re.compile(r'[a-zA-Z]+'),
+                            lambda s: self.variables.get(s, s)),
+                    'op': (re.compile(r'[+\-*\/^=]+'),
+                           self.resolve_op),
+                    'sep': (re.compile(r'[()]'),
+                            lambda s: s),
+                    }
 
         out_queue = deque()
-        idx = 0
-        while user_input[idx:-1]:
-            for patt in patterns:
-                match = re.match(patt[idx:-1], user_input)
+        i = 0
+        while user_input[i:]:
+            for patt, func in patterns.values():
+                match = re.match(patt, user_input[i:])
                 if not match:  # no match found
                     continue
 
-
-
-    def parse_input(self, user_input: str) -> deque:
-        """
-        Parses an input expression splitting it into arguements, variables,
-        operators, and parenthesis. Output is a queue ordered from left to
-        right. Non unitary + or - operators are interpreted; all spaces are
-        removed.
-        """
-
-        # handle for leading + or -
-        if user_input.startswith('+') or user_input.startswith('-'):
-            user_input = '0' + user_input
-
-        # created needed datastructures
-        input_queue = deque(user_input)
-        out_queue = deque()  # parsed output
-        arg_queue = deque()  # for multi-character numerals / variables
-        op_q = deque()  # for nonunitary + or -, or invalid ops like "*+/"
-
-        while input_queue:
-
-            elem = input_queue.popleft()
-
-            if elem.isalnum():
-                if op_q:
-                    # first flush op queue to output
-                    if self.is_resolvable(op_q):
-                        out_queue.append(self.resolve_op(''.join(op_q)))
-                    else:
-                        out_queue.append(''.join(op_q))
-                    op_q.clear()
-
-                arg_queue.append(elem)
+                out_queue.append(func(match[0]))
+                i += match.end()
+                break
             else:
-                if arg_queue:
-                    # first flush arguement queue to output
-                    out_queue.append(''.join(arg_queue))
-                    arg_queue.clear()
-
-                if elem == ' ':
-                    if op_q:
-                        # flush op queue to output
-                        if self.is_resolvable(op_q):
-                            out_queue.append(self.resolve_op(''.join(op_q)))
-                        else:
-                            out_queue.append(''.join(op_q))
-                        op_q.clear()
-
-                elif elem in '()=':
-                    if op_q:
-                        # flush op queue to output
-                        if self.is_resolvable(op_q):
-                            out_queue.append(self.resolve_op(''.join(op_q)))
-                        else:
-                            out_queue.append(''.join(op_q))
-                        op_q.clear()
-
-                    out_queue.append(elem)
-
-                elif elem in self.operators:
-                    op_q.append(elem)
-
-                else:
-                    # pass through unknown character. i.e. ! # $
-                    out_queue.append(elem)
-
-        else:
-            if arg_queue:
-                out_queue.append(''.join(arg_queue))
-                arg_queue.clear()
-            if op_q:
-                out_queue.append(''.join(op_q))
-                op_q.clear()
+                raise InvalidExpressionError(f'Input error at position {i}')
 
         return out_queue
 
+    # needs to be rewritten to use self.input queue and have no input arguements
     def is_valid_expression(self, expression: str) -> bool:
         """parses through user inputs and validates syntax, returning a bool.
         If an uninitialized variable is present it also sets the instance var
         unknown_var to True"""
 
-        input_queue = self.parse_input(self.replace_variables(expression))
+        input_queue = self.parse_input(expression)
         output_stack = deque()  # top is left
 
         parenthesis_count = 0
@@ -290,7 +224,7 @@ class Calculator():
                 return False
 
             elif token.isalpha():
-                # all existing vars are filtered out by replace_variables
+                # all existing vars are already replaced with values by here
                 self.unknown_var = True
                 return False
 
@@ -313,77 +247,63 @@ class Calculator():
             return False
         return True
 
-    def check_assignment(self, string: str) -> None:
+    def pop_var_name(self) -> str:
         """
-        checks if an assignment is valid and has proper syntax. if so it adds
-        the name and value of the assignment to the instance namespace.
-        If an uninitialized variable is present it also sets the instance var
-        unknown_var to True.
+        checks that only a single equals is present (boolean comparison not
+        supported), that the expression has a varable name/"="/then an
+        expression, and that the variable name is a valid name. Then removes
+        the variable name from the queue, leaving the expression in the queue
+        and returns the variable name.
         """
 
-        if string.count('=') > 1:
-            raise InvalidExpressionError("Too many '=' in assignment")
+        if self.input_queue.count('=') != 1:
+            raise InvalidExpressionError('Only 1 "=" in assignment expression')
 
-        var_name, var_expression = string.split('=')
+        if (len(self.input_queue) < 3) or (self.input_queue[1] != '='):
+            # "var" "=" "expression"
+            raise InvalidExpressionError('missing variable or expression')
+
+        var_name = self.input_queue.popleft()
+        self.input_queue.popleft()  # remove "="
 
         if self.is_valid_var_name(var_name):
-            if self.is_valid_expression(var_expression):
-                self.variables[var_name] = self.calculate(var_expression)
-                return None
+            return var_name
+        raise InvalidVariableError('variable names have only letters '
+                                   f'(error: {var_name})')
 
-            # is_valid_expression returned False because of a unknown var
-            if self.unknown_var:
-                print('Unknown variable')
-                self.unknown_var = False
-                return None
-
-            print('Invalid assignment')
-            return None
-
-        print('Invalid identifier')
-
-    def run_command(self, string) -> None:
-
-        print(self.commands[string])
-        if "exit" in string:
-            self.status = False
+    def run_command(self, cmd_str) -> None:
+        try:
+            print(self.commands[cmd_str].message)
+            self.commands[cmd_str].func()
+        except KeyError:
+            raise UnknownCommandError(f'Unsupported command: {cmd_str}')
 
     def process_input(self, user_input: str) -> None:
+
+        if user_input == "":
+            return None
 
         if user_input.startswith('\\'):  # check if command
             self.run_command(user_input)
             return None
 
-        if '=' in user_input:  # check assignment
-            self.check_assignment(user_input)
-            return None
+        self.input_queue = self.parse_input(user_input)
 
-        if self.is_valid_expression(user_input):  # check valid input
-            ans = self.calculate(user_input)  # if so calculate
-            print(ans)
-            self.variables['ans'] = ans  # save last answer
-            return None
+        if '=' in self.input_queue:  # check assignment
+            var_name = self.pop_var_name()
+        else:
+            var_name = None
 
-        # is_valid_expression returned False because of a unknown var
-        if self.unknown_var:
-            print('Unknown variable')
-            self.unknown_var = False
-            return None
+        if self.is_valid_expression():
 
-        print('Invalid expression')
+            # save last answer
+            self.variables['ans'] = self.calculate(user_input)
+            print(self.variables['ans'])
+        else:
+            raise InvalidExpressionError('Invalid expression')
 
-    def is_valid_input(self, user_input: str) -> bool:
-
-        # check if blank
-        if user_input == "":
-            return False
-
-        # check if command
-        if user_input.startswith('\\'):
-            return user_input.lstrip('\\') in self.commands
-
-        # check valid input
-        return self.is_valid_expression(user_input)
+        if var_name:
+            self.variables[var_name] = self.variables['ans']
 
     @ staticmethod
     def santitize_input(user_input: str) -> str:
@@ -392,39 +312,36 @@ class Calculator():
 
     def start_session(self) -> None:
 
-        self.status = True
-
-        while self.status:
+        while True:
             try:
                 user_input = self.santitize_input(input())
-                if self.is_valid_input(user_input):
-                    self.process_input(user_input)
-                else:
-                    raise
-            except UnknownVariableError:
-                print('Unknown variable')
-            except InvalidVariableError:
-                print('Invalid variable')
-            except UnknownCommandError:
-                print('Unknown command')
+                self.process_input(user_input)
+
+            except CalculatorBaseError as err:
+                print(err)
 
 
-class UnknownVariableError(Exception):
+class CalculatorBaseError(Exception):
     def __init__(self, message="Unknown variable", *args: object) -> None:
         super().__init__(message, *args)
 
 
-class InvalidVariableError(Exception):
+class UnknownVariableError(CalculatorBaseError):
+    def __init__(self, message="Unknown variable", *args: object) -> None:
+        super().__init__(message, *args)
+
+
+class InvalidVariableError(CalculatorBaseError):
     def __init__(self, message="Invalid variable", *args: object) -> None:
         super().__init__(message, *args)
 
 
-class InvalidExpressionError(Exception):
+class InvalidExpressionError(CalculatorBaseError):
     def __init__(self, message="Invalid expression", *args: object) -> None:
         super().__init__(message, *args)
 
 
-class UnknownCommandError(Exception):
+class UnknownCommandError(CalculatorBaseError):
     def __init__(self, message="Unknown command", *args: object) -> None:
         super().__init__(message, *args)
 
