@@ -24,8 +24,7 @@ class Calculator():
     """
 
     def __init__(self) -> None:
-        self.variables = {}
-        self.commands = {'/exit': Command('Bye!', exit()),
+        self.commands = {'/exit': Command('Bye!', lambda: exit()),
                          '/help': Command(self.__doc__, lambda: None),
                          '/clear': Command('Variables Erased',
                                            lambda: self.variables.clear()),
@@ -40,7 +39,20 @@ class Calculator():
                           '^': Operator(4, 'R', None),
                           }
 
-        self.input_queue = deque()
+        # name: (regex pattern, processing func)
+        self.element_patterns = {
+                                 'arg': (re.compile(r'\d+|\d+\.\d*|\.\d*'),
+                                         float),
+                                 'var': (re.compile(r'[a-zA-Z]+'),
+                                         lambda s: self.variables.get(s, s)),
+                                 'op': (re.compile(r'[+\-*\/^=]+'),
+                                        self.resolve_op),
+                                 'sep': (re.compile(r'[()]'),
+                                         lambda s: s),
+                                 }
+
+        self.variables = {}
+        self.expression = deque()
 
     def _continue_operator_stack_pop(self, operator_stack: deque, tok: str) -> bool:
         """
@@ -66,7 +78,7 @@ class Calculator():
 
         return condition1 or condition2
 
-    def convert_to_rpn(self, infix_expression: str) -> deque:
+    def convert_expression_to_rpn(self) -> None:
         """
         Implements Dijkstra's Shunting-yard algorithm to convert between infix
         and reverse-polish notations using a stack
@@ -74,66 +86,71 @@ class Calculator():
         en.wikipedia.org/wiki/Shunting-yard_algorithm#The_algorithm_in_detail
         """
 
-        input_queue = self.parse_input(infix_expression)
         output_queue = deque()
-        op_stack = deque()  # top is right
+        op_stack = deque()  # top is the right side
 
-        while input_queue:
-            token = input_queue.popleft()
+        while self.expression:
+            element = self.expression.popleft()
 
-            if token.isnumeric():
-                output_queue.append(token)  # numbers pass right to output
+            if isinstance(element, str):
+                raise UnknownVariableError(f'Undeclared variable "{element}"')
 
-            elif token in self.operators:
+            if isinstance(element, float):
+                output_queue.append(element)  # numbers pass right to output
+
+            elif element in self.operators:
                 # pop higher presidence operators / () before pushing to stack
-                while self._continue_operator_stack_pop(op_stack, token):
+                while self._continue_operator_stack_pop(op_stack, element):
                     output_queue.append(op_stack.pop())
-                op_stack.append(token)
+                op_stack.append(element)
 
-            elif token == '(':
-                op_stack.append(token)  # automatically ( get pushed to stack
+            elif element == '(':
+                op_stack.append(element)  # automatically ( get pushed to stack
 
-            elif token == ')':
+            elif element == ')':
                 # when closing ) found push all operators to the output
                 # and discard (
-                while (op_stack[-1] != '('):
-                    output_queue.append(op_stack.pop())
-                if op_stack[-1] == '(':
+                try:
+                    while (op_stack[-1] != '('):
+                        output_queue.append(op_stack.pop())
                     op_stack.pop()
+                except IndexError:
+                    raise InvalidExpressionError("Unbalanced parenthesis")
 
         while op_stack:
             output_queue.append(op_stack.pop())
 
-        return output_queue
+        while output_queue:
+            self.expression.append(output_queue.popleft())
 
-    def calculate(self, expression: str) -> int:
+    def calculate_expression(self) -> float:
         """
         Converts valid infix expressions to reverse polish notation then
         calculates and returns the resulting value
         """
 
         # top of input and comp stack is the left
-        input_stack = self.convert_to_rpn(expression)
+        self.convert_expression_to_rpn()
         comp_stack = deque()
 
-        while input_stack:
-            token = input_stack.popleft()
+        while self.expression:
+            element = self.expression.popleft()
 
-            if token.isnumeric():
-                comp_stack.appendleft(int(token))
+            if isinstance(element, float):
+                comp_stack.appendleft(element)
             else:
                 b = comp_stack.popleft()
                 a = comp_stack.popleft()
 
-                if token == '+':
+                if element == '+':
                     comp_stack.appendleft(a + b)
-                elif token == '-':
+                elif element == '-':
                     comp_stack.appendleft(a - b)
-                elif token == '/':
-                    comp_stack.appendleft(a//b)
-                elif token == '*':
+                elif element == '/':
+                    comp_stack.appendleft(a/b)
+                elif element == '*':
                     comp_stack.appendleft(a*b)
-                elif token == '^':
+                elif element == '^':
                     comp_stack.appendleft(a**b)
 
         return comp_stack.pop()
@@ -156,22 +173,10 @@ class Calculator():
         interpreted.
         """
 
-        # name: (regex pattern, processing func)
-        patterns = {
-                    'arg': (re.compile(r'\d+|\d+\.\d*|\.\d*'),
-                            float),
-                    'var': (re.compile(r'[a-zA-Z]+'),
-                            lambda s: self.variables.get(s, s)),
-                    'op': (re.compile(r'[+\-*\/^=]+'),
-                           self.resolve_op),
-                    'sep': (re.compile(r'[()]'),
-                            lambda s: s),
-                    }
-
         out_queue = deque()
         i = 0
         while user_input[i:]:
-            for patt, func in patterns.values():
+            for patt, func in self.element_patterns.values():
                 match = re.match(patt, user_input[i:])
                 if not match:  # no match found
                     continue
@@ -184,16 +189,15 @@ class Calculator():
 
         return out_queue
 
-    # needs to be rewritten to use self.input queue and have no input arguements
-    def is_valid_expression(self, expression: str) -> bool:
+    # needs to be rewritten to use RPN
+    def is_valid_expression(self) -> bool:
         """parses through user inputs and validates syntax, returning a bool.
         If an uninitialized variable is present it also sets the instance var
         unknown_var to True"""
 
-        input_queue = self.parse_input(expression)
+        input_queue = self.expression.copy()
         output_stack = deque()  # top is left
 
-        parenthesis_count = 0
         while input_queue:
             token = input_queue.popleft()
 
@@ -209,36 +213,11 @@ class Calculator():
                     return False  # non unitary + or - handled by parse_input
                 output_stack.appendleft(token)
 
-            elif token in '()':  # keep track of the number of parenthesis
-
-                if (token == ')') and (parenthesis_count == 0):
-                    return False  # ) before an opening (
-
-                parenthesis_count += 1 if token == '(' else -1
-                if parenthesis_count < 0:  # too many )
-                    return False
-
-            elif token == '=':
-                # only valid for assignment, gets stripped out before
-                # is_valid_expression is called
-                return False
-
-            elif token.isalpha():
-                # all existing vars are already replaced with values by here
-                self.unknown_var = True
-                return False
-
-            elif token.isalnum():  # invalid variable name
-                return False
-
             else:  # unknown token
                 return False
 
         if token in self.operators:
             return False  # last character is an operator
-
-        if parenthesis_count != 0:   # unbalanced ()
-            return False
 
         return True
 
@@ -256,15 +235,15 @@ class Calculator():
         and returns the variable name.
         """
 
-        if self.input_queue.count('=') != 1:
+        if self.expression.count('=') != 1:
             raise InvalidExpressionError('Only 1 "=" in assignment expression')
 
-        if (len(self.input_queue) < 3) or (self.input_queue[1] != '='):
+        if (len(self.expression) < 3) or (self.expression[1] != '='):
             # "var" "=" "expression"
             raise InvalidExpressionError('missing variable or expression')
 
-        var_name = self.input_queue.popleft()
-        self.input_queue.popleft()  # remove "="
+        var_name = self.expression.popleft()
+        self.expression.popleft()  # remove "="
 
         if self.is_valid_var_name(var_name):
             return var_name
@@ -287,17 +266,18 @@ class Calculator():
             self.run_command(user_input)
             return None
 
-        self.input_queue = self.parse_input(user_input)
+        self.expression = self.parse_input(user_input)
 
-        if '=' in self.input_queue:  # check assignment
+        if '=' in self.expression:  # check assignment
             var_name = self.pop_var_name()
         else:
             var_name = None
+        self.convert_expression_to_rpn()
 
         if self.is_valid_expression():
 
             # save last answer
-            self.variables['ans'] = self.calculate(user_input)
+            self.variables['ans'] = self.calculate_expression()
             print(self.variables['ans'])
         else:
             raise InvalidExpressionError('Invalid expression')
