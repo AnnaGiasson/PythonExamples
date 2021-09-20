@@ -4,7 +4,7 @@ from collections import namedtuple
 
 
 Operator = namedtuple('Operator',
-                      ('presidence', 'associativity', 'leading_value'))
+                      ('presidence', 'associativity', 'leading_value', 'eval'))
 
 Command = namedtuple('Command',
                      ('message', 'func'))
@@ -24,19 +24,19 @@ class Calculator():
     """
 
     def __init__(self) -> None:
-        self.commands = {'/exit': Command('Bye!', lambda: exit()),
-                         '/help': Command(self.__doc__, lambda: None),
-                         '/clear': Command('Variables Erased',
-                                           lambda: self.variables.clear()),
+        self.commands = {r'\exit': Command('Bye!', lambda: exit()),
+                         r'\help': Command(self.__doc__, lambda: None),
+                         r'\clear': Command('Variables Erased',
+                                            lambda: self.variables.clear()),
                          }
 
         # op: ("presidence in RPN", "associativity (Left/Right)")
         # presidence and associativity used to convert to RPN
-        self.operators = {'+': Operator(2, 'L', 0),
-                          '-': Operator(2, 'L', 0),
-                          '*': Operator(3, 'L', None),
-                          '/': Operator(3, 'L', None),
-                          '^': Operator(4, 'R', None),
+        self.operators = {'+': Operator(2, 'L', 0.0, lambda a, b: a+b),
+                          '-': Operator(2, 'L', 0.0, lambda a, b: a-b),
+                          '*': Operator(3, 'L', None, lambda a, b: a*b),
+                          '/': Operator(3, 'L', None, lambda a, b: a/b),
+                          '^': Operator(4, 'R', None, lambda a, b: a**b),
                           }
 
         # name: (regex pattern, processing func)
@@ -54,7 +54,8 @@ class Calculator():
         self.variables = {}
         self.expression = deque()
 
-    def _continue_operator_stack_pop(self, operator_stack: deque, tok: str) -> bool:
+    def _continue_operator_stack_pop(self, operator_stack: deque,
+                                     token: str) -> bool:
         """
         only used in 'convert_to_rpn' when determining when to stop removing
         elements from the op stack. Logic was too complex to stick in the 'if'
@@ -65,18 +66,18 @@ class Calculator():
         if not operator_stack:  # stack is empty
             return False
 
-        top_op = operator_stack[-1]
+        elem = self.operators[token]
+        top_elem = operator_stack[-1]
 
-        condition1 = (top_op in self.operators)
-        if condition1:  # if statement because ( and ) arent in self.operators
-            condition1 &= (self.operators[top_op].presidence > self.operators[tok].presidence)
+        if top_elem in self.operators:  # catch "(" / ")", not in operators
+            if self.operators[top_elem].presidence > elem.presidence:
+                return True
 
-        condition2 = (top_op != '(')
-        if condition2:  # if statement because ( and ) arent in self.operators
-            condition2 &= (self.operators[top_op].presidence == self.operators[tok].presidence)
-            condition2 &= (self.operators[tok].associativity == 'L')
+        if (top_elem != '('):  # handle for ")"
+            if (self.operators[top_elem].presidence == elem.presidence):
+                return (elem.associativity == 'L')
 
-        return condition1 or condition2
+        return False
 
     def convert_expression_to_rpn(self) -> None:
         """
@@ -92,7 +93,7 @@ class Calculator():
         while self.expression:
             element = self.expression.popleft()
 
-            if isinstance(element, str):
+            if isinstance(element, str) and element.isalnum():
                 raise UnknownVariableError(f'Undeclared variable "{element}"')
 
             if isinstance(element, float):
@@ -130,28 +131,26 @@ class Calculator():
         """
 
         # top of input and comp stack is the left
-        self.convert_expression_to_rpn()
+        # self.convert_expression_to_rpn()
         comp_stack = deque()
 
         while self.expression:
             element = self.expression.popleft()
 
-            if isinstance(element, float):
+            if isinstance(element, (float, int)):
                 comp_stack.appendleft(element)
-            else:
+                continue
+
+            if element not in self.operators:
+                raise InvalidExpressionError(f'Unknown operator: {element}')
+
+            try:
                 b = comp_stack.popleft()
                 a = comp_stack.popleft()
+            except IndexError:
+                raise InvalidExpressionError('Missing operands')
 
-                if element == '+':
-                    comp_stack.appendleft(a + b)
-                elif element == '-':
-                    comp_stack.appendleft(a - b)
-                elif element == '/':
-                    comp_stack.appendleft(a/b)
-                elif element == '*':
-                    comp_stack.appendleft(a*b)
-                elif element == '^':
-                    comp_stack.appendleft(a**b)
+            comp_stack.appendleft(self.operators[element].eval(a, b))
 
         return comp_stack.pop()
 
@@ -189,43 +188,6 @@ class Calculator():
 
         return out_queue
 
-    # needs to be rewritten to use RPN
-    def is_valid_expression(self) -> bool:
-        """parses through user inputs and validates syntax, returning a bool.
-        If an uninitialized variable is present it also sets the instance var
-        unknown_var to True"""
-
-        input_queue = self.expression.copy()
-        output_stack = deque()  # top is left
-
-        while input_queue:
-            token = input_queue.popleft()
-
-            if token.isnumeric():
-                if output_stack and (output_stack[0].isnumeric()):
-                    return False  # two adjanct numbers with no operator
-                output_stack.appendleft(token)
-
-            elif set(token).intersection(set(self.operators)):  # contains ops
-                if output_stack and (output_stack[0] in self.operators):
-                    return False  # two adjanct operators with no number
-                if len(token) > 1:
-                    return False  # non unitary + or - handled by parse_input
-                output_stack.appendleft(token)
-
-            else:  # unknown token
-                return False
-
-        if token in self.operators:
-            return False  # last character is an operator
-
-        return True
-
-    def is_valid_var_name(self, var_name: str) -> bool:
-        if not var_name.isalpha():
-            return False
-        return True
-
     def pop_var_name(self) -> str:
         """
         checks that only a single equals is present (boolean comparison not
@@ -245,7 +207,7 @@ class Calculator():
         var_name = self.expression.popleft()
         self.expression.popleft()  # remove "="
 
-        if self.is_valid_var_name(var_name):
+        if var_name.isalpha():
             return var_name
         raise InvalidVariableError('variable names have only letters '
                                    f'(error: {var_name})')
@@ -268,19 +230,24 @@ class Calculator():
 
         self.expression = self.parse_input(user_input)
 
-        if '=' in self.expression:  # check assignment
+        # check for an assignment
+        if '=' in self.expression:
             var_name = self.pop_var_name()
         else:
             var_name = None
+
+        # check leading +/- signs
+        if self.expression[0] in self.operators:
+            val = self.operators[self.expression[0]].leading_value
+            if val is not None:
+                self.expression.appendleft(val)
+            else:
+                raise InvalidExpressionError("Missing operands")
+
         self.convert_expression_to_rpn()
 
-        if self.is_valid_expression():
-
-            # save last answer
-            self.variables['ans'] = self.calculate_expression()
-            print(self.variables['ans'])
-        else:
-            raise InvalidExpressionError('Invalid expression')
+        self.variables['ans'] = self.calculate_expression()  # save last answer
+        print(f"\t= {self.variables['ans']}")
 
         if var_name:
             self.variables[var_name] = self.variables['ans']
@@ -298,7 +265,7 @@ class Calculator():
                 self.process_input(user_input)
 
             except CalculatorBaseError as err:
-                print(err)
+                print(f'\t {err}')
 
 
 class CalculatorBaseError(Exception):
